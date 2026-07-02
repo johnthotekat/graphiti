@@ -7,6 +7,7 @@ from graphiti_core.edges import EntityEdge  # type: ignore
 from graphiti_core.errors import EdgeNotFoundError, GroupsEdgesNotFoundError, NodeNotFoundError
 from graphiti_core.llm_client import LLMClient  # type: ignore
 from graphiti_core.nodes import EntityNode, EpisodicNode  # type: ignore
+from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig  # type: ignore
 
 from graph_service.config import ZepEnvDep
 from graph_service.dto import FactResult
@@ -80,6 +81,18 @@ class ZepGraphiti(Graphiti):
 
 def _create_graphiti_client(settings: ZepEnvDep) -> ZepGraphiti:
     """Create a ZepGraphiti client based on the configured database backend."""
+    # Create embedder with proper configuration
+    embedder_base_url = settings.embeddings_base_url or settings.openai_base_url
+    embedder_api_key = settings.embeddings_api_key or settings.openai_api_key
+    embedding_model_name = settings.embedding_model_name or 'text-embedding-3-small'
+
+    embedder_config = OpenAIEmbedderConfig(
+        api_key=embedder_api_key,
+        base_url=embedder_base_url,
+        embedding_model=embedding_model_name
+    )
+    embedder = OpenAIEmbedder(config=embedder_config)
+
     if settings.db_backend == 'falkordb':
         from graphiti_core.driver.falkordb_driver import FalkorDriver
 
@@ -88,7 +101,7 @@ def _create_graphiti_client(settings: ZepEnvDep) -> ZepGraphiti:
             port=settings.falkordb_port or 6379,  # type: ignore
             database=settings.falkordb_database or 'default_db',  # type: ignore
         )
-        return ZepGraphiti(graph_driver=driver)  # type: ignore
+        return ZepGraphiti(graph_driver=driver, embedder=embedder)  # type: ignore
     else:
         # Validate Neo4j settings are present
         if not all([settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password]):
@@ -100,6 +113,7 @@ def _create_graphiti_client(settings: ZepEnvDep) -> ZepGraphiti:
             uri=settings.neo4j_uri,
             user=settings.neo4j_user,
             password=settings.neo4j_password,
+            embedder=embedder
         )
 
 
